@@ -105,6 +105,7 @@ namespace CommandLineMode
         }
 
         [PauseMenuItemSetting]
+        [MainMenuItemSetting]
         public static CommandLineToggle CommandLineMenu(object factory, GuiFormat format)
         {
             return new CommandLineToggle();
