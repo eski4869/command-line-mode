@@ -1,5 +1,4 @@
 using System;
-using System.Reflection;
 using EntityComponent;
 using JumpKing;
 using JumpKing.API;
@@ -195,11 +194,6 @@ namespace CommandLineMode
 
     public class CommandLineOverlay : Entity
     {
-        private static readonly FieldInfo TimerDisplayPositionField = typeof(GameLoop).GetField(
-            "TIMER_DISPLAY_POSITION",
-            BindingFlags.Static | BindingFlags.NonPublic
-        );
-
         private static CommandLineOverlay _entity;
 
         public static void EnsureAdded()
@@ -259,23 +253,7 @@ namespace CommandLineMode
 
         private static Vector2 GetDrawPosition()
         {
-            try
-            {
-                if (TimerDisplayPositionField != null)
-                {
-                    object value = TimerDisplayPositionField.GetValue(null);
-
-                    if (value is Vector2)
-                    {
-                        return (Vector2)value + new Vector2(0f, 48f);
-                    }
-                }
-            }
-            catch
-            {
-            }
-
-            return new Vector2(12f, 56f);
+            return new Vector2(12f, 336f);
         }
     }
 }
