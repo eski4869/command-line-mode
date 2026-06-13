@@ -1,10 +1,15 @@
 using System;
+using System.IO;
+using System.Reflection;
+using System.Xml.Serialization;
 using EntityComponent;
 using JumpKing;
 using JumpKing.API;
 using JumpKing.BodyCompBehaviours;
 using JumpKing.GameManager;
 using JumpKing.Mods;
+using JumpKing.PauseMenu;
+using JumpKing.PauseMenu.BT.Actions;
 using JumpKing.Player;
 using JumpKing.Util;
 using Microsoft.Xna.Framework;
@@ -16,13 +21,31 @@ namespace CommandLineMode
     [JumpKingMod("eski4869.CommandLineMode")]
     public static class ModEntry
     {
+        private const string SettingsFileName = "eski4869.CommandLineMode.Settings.xml";
+
         private static CommandLineBehaviour _registeredBehaviour;
+        private static CommandLinePreferences _preferences;
+        private static string _settingsPath;
+        private static bool _settingsDirty;
+        private static bool _processExitRegistered;
 
         [OnLevelStart]
         public static void OnLevelStart()
         {
+            EnsurePreferencesLoaded();
             CommandLineOverlay.EnsureAdded();
 
+            if (!_preferences.IsEnabled)
+            {
+                UnregisterCommandLineBehaviour();
+                return;
+            }
+
+            RegisterCommandLineBehaviour();
+        }
+
+        private static void RegisterCommandLineBehaviour()
+        {
             PlayerEntity player = EntityManager.instance.Find<PlayerEntity>();
 
             if (player == null)
@@ -44,6 +67,173 @@ namespace CommandLineMode
             _registeredBehaviour = new CommandLineBehaviour();
             player.m_body.RegisterBehaviour(_registeredBehaviour);
         }
+
+        private static void UnregisterCommandLineBehaviour()
+        {
+            if (_registeredBehaviour == null)
+            {
+                return;
+            }
+
+            PlayerEntity player = EntityManager.instance.Find<PlayerEntity>();
+
+            if (player != null)
+            {
+                try
+                {
+                    player.m_body.RemoveBehaviour(_registeredBehaviour);
+                }
+                catch
+                {
+                }
+            }
+
+            _registeredBehaviour = null;
+            CommandLineState.Close();
+        }
+
+        [OnLevelEnd]
+        public static void OnLevelEnd()
+        {
+            SaveSettingsIfDirty();
+        }
+
+        [OnLevelUnload]
+        public static void OnLevelUnload()
+        {
+            SaveSettingsIfDirty();
+        }
+
+        [PauseMenuItemSetting]
+        public static CommandLineToggle CommandLineMenu(object factory, GuiFormat format)
+        {
+            return new CommandLineToggle();
+        }
+
+        public static bool IsCommandLineEnabled()
+        {
+            EnsurePreferencesLoaded();
+            return _preferences.IsEnabled;
+        }
+
+        public static void SetCommandLineEnabled(bool isEnabled)
+        {
+            EnsurePreferencesLoaded();
+
+            if (_preferences.IsEnabled == isEnabled)
+            {
+                return;
+            }
+
+            _preferences.IsEnabled = isEnabled;
+            _settingsDirty = true;
+
+            if (isEnabled)
+            {
+                RegisterCommandLineBehaviour();
+            }
+            else
+            {
+                UnregisterCommandLineBehaviour();
+            }
+        }
+
+        private static void EnsurePreferencesLoaded()
+        {
+            if (_preferences != null)
+            {
+                RegisterProcessExit();
+                return;
+            }
+
+            string assemblyDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            _settingsPath = Path.Combine(assemblyDir, SettingsFileName);
+
+            try
+            {
+                if (File.Exists(_settingsPath))
+                {
+                    var serializer = new XmlSerializer(typeof(CommandLinePreferences));
+
+                    using (var stream = File.OpenRead(_settingsPath))
+                    {
+                        _preferences = (CommandLinePreferences)serializer.Deserialize(stream);
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            if (_preferences == null)
+            {
+                _preferences = new CommandLinePreferences();
+                _settingsDirty = true;
+            }
+
+            RegisterProcessExit();
+        }
+
+        private static void RegisterProcessExit()
+        {
+            if (_processExitRegistered)
+            {
+                return;
+            }
+
+            AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
+            _processExitRegistered = true;
+        }
+
+        private static void OnProcessExit(object sender, EventArgs e)
+        {
+            SaveSettingsIfDirty();
+        }
+
+        private static void SaveSettingsIfDirty()
+        {
+            if (!_settingsDirty || _preferences == null)
+            {
+                return;
+            }
+
+            try
+            {
+                var serializer = new XmlSerializer(typeof(CommandLinePreferences));
+
+                using (var stream = File.Create(_settingsPath))
+                {
+                    serializer.Serialize(stream, _preferences);
+                }
+
+                _settingsDirty = false;
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    public class CommandLineToggle : ITextToggle
+    {
+        public CommandLineToggle() : base(ModEntry.IsCommandLineEnabled())
+        {
+        }
+
+        protected override string GetName()
+        {
+            return "Command-line Mode";
+        }
+
+        protected override void OnToggle()
+        {
+            ModEntry.SetCommandLineEnabled(toggle);
+        }
+    }
+
+    public class CommandLinePreferences
+    {
+        public bool IsEnabled { get; set; } = true;
     }
 
     public class CommandLineBehaviour : IBodyCompBehaviour
@@ -214,7 +404,7 @@ namespace CommandLineMode
 
         public override void Draw()
         {
-            if (!CommandLineState.IsActive)
+            if (!ModEntry.IsCommandLineEnabled() || !CommandLineState.IsActive)
             {
                 return;
             }
