@@ -12,6 +12,7 @@ using JumpKing.PauseMenu;
 using JumpKing.PauseMenu.BT.Actions;
 using JumpKing.Player;
 using JumpKing.Util;
+using JumpKing.Util.Tags;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -383,7 +384,7 @@ namespace CommandLineMode
         }
     }
 
-    public class CommandLineOverlay : Entity
+    public class CommandLineOverlay : Entity, IForeground
     {
         private static CommandLineOverlay _entity;
 
@@ -403,7 +404,7 @@ namespace CommandLineMode
             EntityManager.instance.AddObject(_entity);
         }
 
-        public override void Draw()
+        public void ForegroundDraw()
         {
             if (!ModEntry.IsCommandLineEnabled() || !CommandLineState.IsActive)
             {
